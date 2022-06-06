@@ -8,19 +8,19 @@ No momento o script faz somente a validação da coluna "UserPrincipalName"
 
 Funções disponíveis no momento:
 
- 1- Configurar redirect nas contas da Executiva
- 2- Apagar redirect da Executiva
- 3- Checar se a mailbox existe
- 4- Colocar ou removar hide da GAL
- 5- Habilitar archive e litigation hold
- 6- Habilitar autoexpanding archive
- 7- Desabilitar política de email address do Exchange
- 8- Checar se usuário foi migrado para o Exchange Online ou está no Exchange Server (Somente Hybrid)
- 9- Adicionar SMTP secundário na Mailbox
- 10- Converter caixa de Usermailbox para Sharedmailbox
- 11- Converter caixa de Sharedmailbox para Usermailbox
- 12- Adicionar permissões em Sharedmailbox
- 13- Criar sharedmailbox
- 14- Remover regra da inbox do usuário
+1- Configurar redirect nas contas da Executiva
+2- Apagar redirect da Executiva
+3- Checar se a mailbox existe
+4- Colocar ou removar hide da GAL
+5- Habilitar archive e litigation hold
+6- Habilitar autoexpanding archive
+7- Desabilitar política de email address do Exchange
+8- Checar se usuário foi migrado para o Exchange Online ou está no Exchange Server (Somente Hybrid)
+9- Adicionar SMTP secundário na Mailbox
+10- Converter caixa de Usermailbox para Sharedmailbox
+11- Converter caixa de Sharedmailbox para Usermailbox
+12- Adicionar permissões em Sharedmailbox
+13- Criar sharedmailbox
+14- Remover regra da inbox do usuário
  
  https://www.victornanuvem.com/
