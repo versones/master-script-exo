@@ -8,9 +8,9 @@ No momento o script faz somente a validação da coluna "UserPrincipalName"
 
 Funções disponíveis no momento:
 
-1- Configurar redirect nas contas da Executiva
+1- Configurar redirect nas caixas de correio
 
-2- Apagar redirect da Executiva
+2- Apagar redirect das caixas de correio
 
 3- Checar se a mailbox existe
 
