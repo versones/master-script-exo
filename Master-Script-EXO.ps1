@@ -10,7 +10,7 @@ Write-Host "
 #######################################################################################################################
 ##                                                                                                                   ##
 ## SCRIPT DE USO PARA O EXCHANGE ONLINE                                                                              ##
-## DESENVOLVIDO POR: VICTOR MARTINS                                                                                  ##                                                                                         ##
+## DESENVOLVIDO POR: VICTOR MARTINS                                                                                  ##
 ## https://www.victornanuvem.com/                                                                                    ##
 ##                                                                                                                   ##
 ## VERSÃO 0.4                                                                                                        ##
@@ -127,8 +127,8 @@ CSV Inválido, voltando ao menu inicial
 function Menu {
 "--------------------------------------------------"
 Write-Host -ForegroundColor Yellow " Escolha a opção desejada"
-" 1- Configurar redirect nas contas da Executiva
- 2- Apagar redirect da Executiva
+" 1- Configurar redirect nas caixas de correio
+ 2- Apagar redirect das caixas de correio
  3- Checar se a mailbox existe
  4- Colocar ou removar hide da GAL
  5- Habilitar archive e litigation hold
