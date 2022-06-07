@@ -189,7 +189,7 @@ function sair {
 break
 }
 
-#1- Configurar redirect nas contas da Executiva
+#1- Configurar redirect das caixas de correio
 function um {
 
 <# HEADERS NECESSARIOS 
