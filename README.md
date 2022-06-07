@@ -14,7 +14,7 @@ Funções disponíveis no momento:
 
 3- Checar se a mailbox existe
 
-4- Colocar ou removar hide da GAL
+4- Colocar ou remover hide da GAL
 
 5- Habilitar archive e litigation hold
 
