@@ -1,39 +1,31 @@
 # master-script-exo
 
-Este script foi criado para facilitar o gerenciamento de certas funções do Exchange Online.
-Podem haver alguns bugs, peço que reportem para que possa ser corrigido.
+This script was created to make it easier to manage certain Exchange Online functions.
+There may be some bugs, please report them so it can be fixed.
 
-Dentro de cada função existe uma nota com a exigência das colunas necessárias para que o CSV execute corretamente.
-No momento o script faz somente a validação da coluna "UserPrincipalName"
+Inside each function there is a note with the requirement of columns needed for the CSV to execute correctly.
+At the moment the script only validates the column "UserPrincipalName"
 
-Funções disponíveis no momento:
+The script was recently translated from PT-BR to EN-US to help more people.
 
-1- Configurar redirect nas caixas de correio
+Functions currently available:
 
-2- Apagar redirect das caixas de correio
-
-3- Checar se a mailbox existe
-
-4- Colocar ou remover hide da GAL
-
-5- Habilitar archive e litigation hold
-
-6- Habilitar autoexpanding archive
-
-7- Desabilitar política de email address do Exchange
-
-8- Checar se usuário foi migrado para o Exchange Online ou está no Exchange Server (Somente Hybrid)
-
-9- Adicionar SMTP secundário na Mailbox
-
-10- Converter caixa de Usermailbox para Sharedmailbox
-
-11- Converter caixa de Sharedmailbox para Usermailbox
-
-12- Adicionar permissões em Sharedmailbox
-
-13- Criar sharedmailbox
-
-14- Remover regra da inbox do usuário
+ 1- Configure mail forwarding in mailboxes
+ 2- Delete mail forwarding from mailboxes
+ 3- Check if mailbox(es) exist(s)
+ 4- Show or Hide mailbox(es) from GAL
+ 5- Enable archive and/or litigation hold
+ 6- Enable autoexpanding archive
+ 7- Disable 'Email address policies' from Exchange
+ 8- Check if user migrated to Exchange Online or is on Exchange Server (Only Hybrid)
+ 9- Add Secondary SMTP Address in Mailbox
+ 10- Convert Usermailbox to Sharedmailbox
+ 11- Convert Sharedmailbox to Usermailbox
+ 12- Add permissions on Sharedmailbox
+ 13- Create a Sharedmailbox
+ 14- Remove Inbox Rule from Mailbox
+ 15- Export mailbox permissions (UserMailbox and/or SharedMailbox)
+ 16- Check Usermailbox Size, Archive and Litigation Hold settings
  
+ Follow the evolution of the project on my blog
  https://www.victornanuvem.com/
