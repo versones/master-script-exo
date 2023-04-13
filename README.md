@@ -8,6 +8,7 @@ At the moment the script only validates the column "UserPrincipalName"
 
 The script was recently translated from PT-BR to EN-US to help more people.
 
+
 Functions currently available:
 
 1- Configure mail forwarding in mailboxes
@@ -41,6 +42,7 @@ Functions currently available:
 15- Export mailbox permissions (UserMailbox and/or SharedMailbox)
 
 16- Check Usermailbox Size, Archive and Litigation Hold settings
+
  
  Follow the evolution of the project on my blog
  https://www.victornanuvem.com/
