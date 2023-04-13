@@ -9,71 +9,96 @@ Write-Host "
 
 #######################################################################################################################
 ##                                                                                                                   ##
-## SCRIPT DE USO PARA O EXCHANGE ONLINE                                                                              ##
-## DESENVOLVIDO POR: VICTOR MARTINS                                                                                  ##
+## SCRIPT FOR EXCHANGE ONLINE                                                                                        ##
+## DEVELOPED BY: VICTOR MARTINS                                                                                      ##
 ## https://www.victornanuvem.com/                                                                                    ##
 ##                                                                                                                   ##
-## VERSÃO 0.4                                                                                                        ##
+## VERSION 0.5                                                                                                       ##
 ##                                                                                                                   ##
-## Descrição: Esse script realiza tarefas baseado em arquivos CSV                                                    ##
-## Antes de usar o script leia as definições de cada função, qualquer ação incorreta pode prejudicar o seu ambiente  ##
+## Description: This script performs tasks based on CSV files or with all users based on menu selection              ##
+## Before using the script, read the definitions of each function, any incorrect action can harm your environment    ##
 ##                                                                                                                   ##
 #######################################################################################################################"-ForegroundColor Yellow
 
-#Configuracoes
+
+##### SCRIPT OPTIONS #####
+# Change it according to your location
+# CSV Delimiter configuration
 $delimiter=";"
-$caminholog="D:\temp\logs"
+# Path to save log files
+$caminholog="C:\temp\logs"
+##### END OF SCRIPT OPTIONS ####
 
 #Funcao para logar no Exchange Online
 function Login {
+
 #Conectar e logar no ExchangeOnline (MFA)
+#Lista o módulo do exchange para verificar se a sessão está ativa
+if (-not (Get-Module -Name ExchangeOnlineManagement -ListAvailable)) {
+    Write-Host "Exchange Online module is not installed. Do you want to install it now? (Y/N)"
+
+    $response = Read-Host
+    if ($response.ToLower() -eq 'y') {
+        Install-Module -Name ExchangeOnlineManagement
+        Write-Host "The Exchange Online module has been successfully installed." -ForegroundColor Yellow
+    }
+    else {
+        Write-Host "The installation of the Exchange Online module was cancelled.
+The script will not proceed."
+
+sair
+    }
+}
+else {
+
+$ExchangeModule = Get-Module -Name ExchangeOnlineManagement -ListAvailable
+
+if ($ExchangeModule.Version -ge '3.0') {
+$getsessionsv3 = Get-ConnectionInformation | Select-Object State,Name
+$isconnectedv3 = (@($getsessionsv3) -like '@{State=Connected; Name=ExchangeOnline*').Count -gt 0
+}
+else {
 $getsessions = Get-PSSession | Select-Object -Property State, Name
 $isconnected = (@($getsessions) -like '@{State=Opened; Name=ExchangeOnlineInternalSession*').Count -gt 0
-If ($isconnected -eq "True") {
+}
+
+
+If ($isconnected -eq "True" -or $isconnectedv3 -eq "True") {
 #Connect-ExchangeOnline ##-ne
 #Sessao aberta, valida
 Write-Host "
-Existe uma sessão aberta para o Exchange Online
-Digite S para utilizar a mesma sessão ou qualquer outra tecla para iniciar uma nova sessão" -ForeGroundColor Green
+There is an open session for Exchange Online" -ForegroundColor Green
 
 #Usar mesma sessao?
-$r = Read-Host "Digite 'S' para usar a mesma conexão"
-	if($r.ToLower() -eq 's')
+$r = Read-Host "Type [Y] to use the same session or any other key to start a new session"
+	if($r.ToLower() -eq 'y')
 		{
-			Write-Host "Utilizando a mesma sessão..." -ForeGroundColor Green
+			Write-Host "Using the same session..." -ForeGroundColor Green
 			return;	
 		}
 #Senao, remover sessao ativa
-	$getsessions | Remove-PSSession
+Write-Host "Disconnecting from Exchange Online active session..." -ForegroundColor Yellow
+if ($ExchangeModule.Version -ge '3.0') {
+Disconnect-ExchangeOnline -Confirm:$false
+}
+else {
+$getsessions | Remove-PSSession
+}
+	
 	    }
 
-#Contador de erros de conexão
-$f = 0
-$i = 0
-while ($f -eq 0) 
-  {
-	$i++
-	if($i -eq 4)
-       {
-	     Write-host "Problemas de autenticação, não é possível iniciar o script" -ForegroundColor Red				
-         #exit
-         #Finaliza o script depois de 3 erros
-         break;
-        }
-#Conectar ao Exchange Online
  try
     { 
-      Connect-ExchangeOnline
-      $f = 2
+      Connect-ExchangeOnline -ShowBanner:$false
     }
 #Se der erro
   catch
    {
-	Write-host "Erro de senha ou permissão. Tente novamente." -ForegroundColor Red
+	Write-host "An error occurred while connecting to Exchange Online. Try again." -ForegroundColor Red
+    break
    }
   }
 }
-
 
 #Importar CSV
 Function Get-FileName($initialDirectory)
@@ -85,13 +110,13 @@ $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
 $OpenFileDialog.initialDirectory = $initialDirectory
 $OpenFileDialog.CheckFileExists = $true
 #$OpenFileDialog.filter = “All files (*.*)| *.*”
-$OpenFileDialog.filter = “Arquivos CSV (*.csv)| *.csv”
+$OpenFileDialog.filter = “CSV Files (*.csv)| *.csv”
 #$OpenFileDialog.ShowDialog() | Out-Null
 
 
  If ($OpenFileDialog.ShowDialog() -eq "Cancel") 
  {
-  [System.Windows.Forms.MessageBox]::Show("Nenhum arquivo foi selecionado. Por favor selecione um arquivo!", "Error", 0, 
+  [System.Windows.Forms.MessageBox]::Show("No files were selected. Please select a file!", "Error", 0, 
   [System.Windows.Forms.MessageBoxIcon]::Exclamation)
   Break
   }   #$Global:SelectedFile = $OpenFileDialog.SafeFileName
@@ -115,8 +140,8 @@ function Validate-CSVHeaders {
      Return
  } else {
  #se o csv nao possuir o header, cancela e volta para o menu
- Write-Host "===================== ATENÇÃO =====================
-CSV Inválido, voltando ao menu inicial
+ Write-Host "===================== WARNING =====================
+Invalid CSV file, returning to main menu
 ===================================================" -ForegroundColor Red
  Start-Sleep 2
  Menu
@@ -126,26 +151,29 @@ CSV Inválido, voltando ao menu inicial
 #================== Abrir opcoes ==================#
 function Menu {
 "--------------------------------------------------"
-Write-Host -ForegroundColor Yellow " Escolha a opção desejada"
-" 1- Configurar redirect nas caixas de correio
- 2- Apagar redirect das caixas de correio
- 3- Checar se a mailbox existe
- 4- Colocar ou removar hide da GAL
- 5- Habilitar archive e litigation hold
- 6- Habilitar autoexpanding archive
- 7- Desabilitar política de email address do Exchange
- 8- Checar se usuário foi migrado para o Exchange Online ou está no Exchange Server (Somente Hybrid)
- 9- Adicionar SMTP secundário na Mailbox
- 10- Converter caixa de Usermailbox para Sharedmailbox
- 11- Converter caixa de Sharedmailbox para Usermailbox
- 12- Adicionar permissões em Sharedmailbox
- 13- Criar sharedmailbox
- 14- Remover regra da inbox do usuário
- 20- Sair
+Write-Host -ForegroundColor Yellow " MENU"
+" 1- Configure mail forwarding in mailboxes
+ 2- Delete mail forwarding from mailboxes
+ 3- Check if mailbox(es) exist(s)
+ 4- Show or Hide mailbox(es) from GAL
+ 5- Enable archive and/or litigation hold
+ 6- Enable autoexpanding archive
+ 7- Disable 'Email address policies' from Exchange
+ 8- Check if user migrated to Exchange Online or is on Exchange Server (Only Hybrid)
+ 9- Add Secondary SMTP Address in Mailbox
+ 10- Convert Usermailbox to Sharedmailbox
+ 11- Convert Sharedmailbox to Usermailbox
+ 12- Add permissions on Sharedmailbox
+ 13- Create a Sharedmailbox
+ 14- Remove Inbox Rule from Mailbox
+ 15- Export mailbox permissions (UserMailbox and/or SharedMailbox)
+ 16- Check Usermailbox Size, Archive and Litigation Hold settings
+
+  0- Exit
 --------------------------------------------------
 "
 
-$opcao=Read-Host "Digite a opção desejada"
+$opcao=Read-Host "Enter the desired option"
 
 #carrega funcao de acordo com a opcao selecionada
 if ($opcao -eq "1") { um }
@@ -162,11 +190,13 @@ elseif ($opcao -eq "11") { onze }
 elseif ($opcao -eq "12") { doze }
 elseif ($opcao -eq "13") { treze }
 elseif ($opcao -eq "14") { quatorze }
-elseif ($opcao -eq "20") { sair }
+elseif ($opcao -eq "15") { quinze }
+elseif ($opcao -eq "16") { dezesseis }
+elseif ($opcao -eq "0") { sair }
 #opcao invalida
 else {
 Write-Host "==================================================
-Opção inválida! Selecione uma opção válida.
+Invalid option! Please select a valid option.
 ==================================================" -ForegroundColor Red
 #aguarda 2 segundos e carrega o menu novamente
 Start-Sleep -Seconds 2
@@ -181,18 +211,18 @@ $dateI = Get-Date -Format "dd/MM/yyyy - HH:mm:ss"
 $Logs = "master-script-exo_"+"$date"+".log"
 Start-Transcript "$caminholog\$logs"
 
-Write-Host "Processo iniciado em" $dateI -ForegroundColor Magenta
+Write-Host "Process started at" $dateI -ForegroundColor Magenta
 
 #sair
 function sair {
-"Saindo do script..."
+"Exiting the script..."
 break
 }
 
-#1- Configurar redirect das caixas de correio
+#1- Configurar redirect nas contas
 function um {
 
-<# HEADERS NECESSARIOS 
+<# CSV HEADERS REQUIRED 
 UserPrincipalName
 NewUPN
 #>
@@ -203,6 +233,22 @@ $File = Get-FileName
 Validate-CSVHeaders
 
 $usuarios = Import-csv -Path $File -Delimiter $delimiter
+
+#================== Abrir opcoes ==================#
+"--------------------------------------------------"
+write-host -ForegroundColor Yellow " How do you want to configure the email route?"
+" 1- Keep copy of message at source mailbox and forward (DeliverToMailboxAndForward)
+ 2- Only forward the message without keeping the copy
+--------------------------------------------------
+"
+$fwdop=Read-Host "Enter the desired option"
+
+
+if ($fwdop -eq "1") {
+$DeliverToMailboxAndForward=$true
+} else {
+$DeliverToMailboxAndForward=$false
+}
 
 #Contador da barra de progresso
 #Zerar variaveis
@@ -215,16 +261,18 @@ foreach ($item in $usuarios) {
 $origem=$item.userprincipalname
 $destino=$item.newupn
 
-Write-Progress -Activity "Configurando redirect nas contas - $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% completo: $CurrentItem de $TotalItems" -PercentComplete $PercentComplete
+Write-Progress -Activity "Setting up forwarding in accounts - $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% complete: $CurrentItem of $TotalItems" -PercentComplete $PercentComplete
 
-Write-Host "Criando redirect de " -NoNewline; Write-Host $origem -ForegroundColor Yellow -NoNewline; Write-Host " para " -NoNewline; Write-Host $destino -ForegroundColor Green;
-Set-Mailbox $origem -ForwardingsmtpAddress $destino -DeliverToMailboxAndForward $False
+Write-Host "Creating forwarding from " -NoNewline; Write-Host $origem -ForegroundColor Yellow -NoNewline; Write-Host " to " -NoNewline; Write-Host $destino -ForegroundColor Green;
+Set-Mailbox $origem -ForwardingsmtpAddress $destino -DeliverToMailboxAndForward $DeliverToMailboxAndForward
 
 $CurrentItem++
 $PercentComplete = [int](($CurrentItem / $TotalItems) * 100)
 
 }
 $elapsedTime.stop()
+Write-Progress -Activity "Setting up forwarding in accounts - $origem" -Completed
+
 Menu
 }
 
@@ -232,7 +280,7 @@ Menu
 # 2- Apagar redirect das contas
 function dois {
 
-<# HEADERS NECESSARIOS 
+<# CSV HEADERS REQUIRED 
 UserPrincipalName
 #>
 
@@ -253,10 +301,10 @@ $elapsedTime = [system.diagnostics.stopwatch]::StartNew()
 foreach ($item in $usuarios) {
 $origem=$item.userprincipalname
 
-Write-Progress -Activity "Apagando redirect da Executiva - $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% completo: $CurrentItem de $TotalItems" -PercentComplete $PercentComplete
+Write-Progress -Activity "Removing forwarding - $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% complete: $CurrentItem of $TotalItems" -PercentComplete $PercentComplete
 
 
-Write-Host "Apagando redirect de " -NoNewline; Write-Host $origem -ForegroundColor Green;
+Write-Host "Deleting redirect from " -NoNewline; Write-Host $origem -ForegroundColor Green;
 Set-Mailbox $origem -ForwardingSmtpAddress $Null
 
 $CurrentItem++
@@ -264,13 +312,15 @@ $PercentComplete = [int](($CurrentItem / $TotalItems) * 100)
 
 }
 $elapsedTime.stop()
+Write-Progress -Activity "Removing forwarding - $origem" -Completed
+
 Menu
 }
 
 # 3- Checar todas as mailboxes
 function tres {
 
-<# HEADERS NECESSARIOS 
+<# CSV HEADERS REQUIRED 
 UserPrincipalName
 #>
 
@@ -299,7 +349,7 @@ foreach ($item in $usuarios) {
 $origem=$item.userprincipalname
 
 
-Write-Progress -Activity "Checando $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% completo: $CurrentItem de $TotalItems" -PercentComplete $PercentComplete
+Write-Progress -Activity "Checking $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% complete: $CurrentItem of $TotalItems" -PercentComplete $PercentComplete
 
 if (Get-ExoMailbox $origem -ErrorAction SilentlyContinue) {
     Write-Host $origem
@@ -316,43 +366,45 @@ $PercentComplete = [int](($CurrentItem / $TotalItems) * 100)
 
 }
 $elapsedTime.stop()
+Write-Progress -Activity "Checking $origem" -Completed
 
 #================== Abrir opcoes ==================#
 "
 --------------------------------------------------------------
 "
-Write-Host "Mailboxes encontradas: " -NoNewline; Write-Host $MbxSim.count -ForegroundColor Green
-Write-Host "Mailboxes não encontradas: " -NoNewline; Write-Host $Mbxnao.count -ForegroundColor Red
+Write-Host "Mailboxes found: " -NoNewline; Write-Host $MbxSim.count -ForegroundColor Green
+Write-Host "Mailboxes not found: " -NoNewline; Write-Host $Mbxnao.count -ForegroundColor Red
 "
 --------------------------------------------------------------"
-write-host -ForegroundColor Yellow " Deseja realizar alguma ação?"
-" 1- Exportar caixas encontradas e não encontradas (.txt) - $caminholog
- 2- Copiar para área de transferência caixas encontradas
- 3- Copiar para área de transferência caixas não encontradas
- 4- Voltar ao menu inicial
+write-host -ForegroundColor Yellow " Do you want to take some action?"
+" 1- Export found and not found mailboxes (.txt) - $caminholog
+ 2- Copy found mailboxes to clipboard
+ 3- Copy NOT found mailboxes to clipboard
+ 4- Go back to main menu
+ 5- Exit
 --------------------------------------------------------------
 "
-$exportar_op3=Read-Host "Escolha a opção desejada"
+$exportar_op3=Read-Host "Enter the desired option"
 if($exportar_op3 -eq "1") {
 
-$MbxSim | Out-File $caminholog\MbxEncontrada-$date.txt
-$MbxNao | Out-File $caminholog\MbxNaoEncontrada-$date.txt
+$MbxSim | Out-File $caminholog\MbxFound-$date.txt
+$MbxNao | Out-File $caminholog\MbxNOTFound-$date.txt
 
 } elseif($exportar_op3 -eq "2") {
 $MbxSim | clip
 } elseif($exportar_op3 -eq "3") {
 $MbxNao | clip
-} else {
-
+} elseif($exportar_op3 -eq "4") {
 Menu
+} else {
+sair
 }
 }
-
 
 # 4- Remover hide da GAL
 function quatro {
 
-<# HEADERS NECESSARIOS 
+<# CSV HEADERS REQUIRED 
 UserPrincipalName
 #>
 
@@ -376,12 +428,12 @@ $elapsedTime = [system.diagnostics.stopwatch]::StartNew()
 
 #================== Abrir opcoes ==================#
 "--------------------------------------------------"
-write-host -ForegroundColor Yellow " Deseja ocultar ou exibir"
-" 1- Ocultar na GAL
- 2- Exibir na GAL
+write-host -ForegroundColor Yellow " Do you want to hide or show"
+" 1- Hide from GAL
+ 2- Show in GAL
 --------------------------------------------------
 "
-$ocultarop=Read-Host "Digite a opção desejada"
+$ocultarop=Read-Host "Enter the desired option"
 
 
 if ($ocultarop -eq "1") {
@@ -393,9 +445,9 @@ foreach ($item in $usuarios) {
 $origem=$item.userprincipalname
 
 
-Write-Progress -Activity "Alterando $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% completo: $CurrentItem de $TotalItems" -PercentComplete $PercentComplete
+Write-Progress -Activity "Changing $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% complete: $CurrentItem of $TotalItems" -PercentComplete $PercentComplete
 
-Write-Host "Alterando atributos de " -NoNewline; Write-Host $origem -ForegroundColor Green;
+Write-Host "Changing attributes of " -NoNewline; Write-Host $origem -ForegroundColor Green;
 Set-Mailbox -Identity $origem -HiddenFromAddressListsEnabled $ocultar
 
 $CurrentItem++
@@ -403,6 +455,8 @@ $PercentComplete = [int](($CurrentItem / $TotalItems) * 100)
 
 }
 $elapsedTime.stop()
+Write-Progress -Activity "Changing $origem" -Completed
+
 Menu
 }
 
@@ -410,7 +464,7 @@ Menu
 # 5- Habilitar archive e litigation hold
 function cinco {
 
-<# HEADERS NECESSARIOS 
+<# CSV HEADERS REQUIRED 
 UserPrincipalName
 #>
 
@@ -426,32 +480,32 @@ $TotalItems=$usuarios.Count
 $CurrentItem = 0
 $PercentComplete = 0
 
-Write-Host "Opcão selecionada: $opcao" -ForegroundColor Cyan
+Write-Host "Selected option: $opcao" -ForegroundColor Cyan
 $elapsedTime = [system.diagnostics.stopwatch]::StartNew()
 
 #================== Abrir opcoes ==================#
 write-host -ForegroundColor Yellow "
 --------------------------------------------------
- 1- Archive e Litigation Hold
- 2- Somente Archive
- 3- Somente Litigation Hold
+ 1- Archive and Litigation Hold
+ 2- Only Archive
+ 3- Only Litigation Hold
 --------------------------------------------------
 "
-$archivelitigationop=Read-Host "Digite a opção desejada"
+$archivelitigationop=Read-Host "Enter the desired option"
 
 #Se selecionou opcao com litigation, perguntar o tempo
 if($archivelitigationop -eq "1" -or $archivelitigationop -eq "3") {
-Write-Host "Preencha com o tempo do litigation hold ou deixe vazio para ilimitado"
-$litigationtempo=Read-Host "Qual tempo do litigation? (vazio para ilimitado)"
+Write-Host "Type the litigation hold time or leave empty for unlimited"
+$litigationtempo=Read-Host "How long for litigation? (empty to unlimited)"
 }
 
 
 foreach ($item in $usuarios) {
 $origem=$item.userprincipalname
 
-Write-Progress -Activity "Alterando $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% completo: $CurrentItem de $TotalItems" -PercentComplete $PercentComplete
+Write-Progress -Activity "Changing $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% complete: $CurrentItem of $TotalItems" -PercentComplete $PercentComplete
 
-Write-Host "Alterando atributos de " -NoNewline; Write-Host $origem -ForegroundColor Green;
+Write-Host "Changing attributes of " -NoNewline; Write-Host $origem -ForegroundColor Green;
 
 #Se selecionado litigation, ler se especificou o tempo e rodar comando correto
 if($archivelitigationop -eq "1" -or $archivelitigationop -eq "3") {
@@ -472,13 +526,15 @@ $PercentComplete = [int](($CurrentItem / $TotalItems) * 100)
 
 }
 $elapsedTime.stop()
+Write-Progress -Activity "Changing $origem" -Completed
+
 Menu
 }
 
 # 6- Habilitar autoexpand archive
 function seis {
 
-<# HEADERS NECESSARIOS 
+<# CSV HEADERS REQUIRED 
 UserPrincipalName
 #>
 
@@ -495,16 +551,16 @@ $TotalItems=$usuarios.Count
 $CurrentItem = 0
 $PercentComplete = 0
 
-Write-Host "Opcão selecionada: $opcao" -ForegroundColor Cyan
+Write-Host "Selected option: $opcao" -ForegroundColor Cyan
 $elapsedTime = [system.diagnostics.stopwatch]::StartNew()
 
 
 foreach ($item in $usuarios) {
 $origem=$item.userprincipalname
 
-Write-Progress -Activity "Alterando $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% completo: $CurrentItem de $TotalItems" -PercentComplete $PercentComplete
+Write-Progress -Activity "Changing $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% complete: $CurrentItem of $TotalItems" -PercentComplete $PercentComplete
 
-Write-Host "Alterando atributos de " -NoNewline; Write-Host $origem -ForegroundColor Green;
+Write-Host "Changing attributes of " -NoNewline; Write-Host $origem -ForegroundColor Green;
 Enable-Mailbox $origem -AutoExpandingArchive
 
 $CurrentItem++
@@ -512,6 +568,8 @@ $PercentComplete = [int](($CurrentItem / $TotalItems) * 100)
 
 }
 $elapsedTime.stop()
+Write-Progress -Activity "Changing $origem" -Completed
+
 Menu
 }
 
@@ -519,7 +577,7 @@ Menu
 #7- Desabilitar política de email address do Exchange
 function sete {
 
-<# HEADERS NECESSARIOS 
+<# CSV HEADERS REQUIRED 
 UserPrincipalName
 #>
 
@@ -530,7 +588,7 @@ Validate-CSVHeaders
 
 $usuarios = Import-csv -Path $File -Delimiter $delimiter
 
-Write-Host "Opcão selecionada: $opcao" -ForegroundColor Cyan
+Write-Host "Selected option: $opcao" -ForegroundColor Cyan
 
 #Contador da barra de progresso
 #Zerar variaveis
@@ -548,11 +606,11 @@ foreach ($item in $usuarios) {
 
 $origem=$item.userprincipalname
 
-Write-Progress -Activity "Alterando $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% completo: $CurrentItem de $TotalItems" -PercentComplete $PercentComplete
+Write-Progress -Activity "Changing $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% complete: $CurrentItem of $TotalItems" -PercentComplete $PercentComplete
 
 if(Set-Mailbox -Identity $origem -EmailAddressPolicyEnabled $false -ErrorAction SilentlyContinue) {
 
-Write-Host "Alterando atributos de " -NoNewline; Write-Host $origem -ForegroundColor Green;
+Write-Host "Changing attributes of " -NoNewline; Write-Host $origem -ForegroundColor Green;
 
 } else {
 Write-Host $origem -ForegroundColor Red
@@ -565,25 +623,26 @@ $PercentComplete = [int](($CurrentItem / $TotalItems) * 100)
 
 }
 $elapsedTime.stop()
+Write-Progress -Activity "Changing $origem" -Completed
 
 "
 --------------------------------------------------------------
 "
-Write-Host "Foram encontrados" $MbxMailPolicyError.count "erros na remoção da policy" -ForegroundColor Red
-Write-Host "Lista de e-mails com erro" -ForegroundColor Cyan
+Write-Host $MbxMailPolicyError.count "5 errors were found when removing the policy" -ForegroundColor Red
+Write-Host "Error email list" -ForegroundColor Cyan
 Write-Host $MbxMailPolicyError
 
 #================== Abrir opcoes ==================#
 "
 --------------------------------------------------------------"
-write-host -ForegroundColor Yellow " Deseja realizar alguma ação?"
-" 1- Exportar lista de erros (.txt) - $caminholog
- 2- Exibir lista de erros na tela
- 3- Copiar para área de transferência lista de erros
- 4- Voltar ao menu inicial
+write-host -ForegroundColor Yellow " Do you want to take some action?"
+" 1- Export error list (.txt) - $caminholog
+ 2- Display error email list on screen
+ 3- Copy to clipboard error email List
+ 4- Go back to main menu
 --------------------------------------------------------------
 "
-$exportar_op7=Read-Host "Escolha a opção desejada"
+$exportar_op7=Read-Host "Choose the desired option"
 if($exportar_op7 -eq "1") {
 #exportar
 $MbxMailPolicyError | Out-File $caminholog\MbxMailPolicyError-$date.txt
@@ -602,7 +661,7 @@ Menu
 
 # 8 Checar se usuário foi migrado para o Exchange Online ou está no Exchange Server (somente híbrido)
 function oito {
-<# HEADERS NECESSARIOS 
+<# CSV HEADERS REQUIRED 
 UserPrincipalName
 #>
 
@@ -619,7 +678,7 @@ $TotalItems=$usuarios.Count
 $CurrentItem = 0
 $PercentComplete = 0
 
-Write-Host "Opcão selecionada: $opcao" -ForegroundColor Cyan
+Write-Host "Option selected: $opcao" -ForegroundColor Cyan
 $elapsedTime = [system.diagnostics.stopwatch]::StartNew()
 
 #Validando se há conexao ativa com o Office 365 (MsolService)
@@ -629,7 +688,7 @@ try
 }
 catch 
 {
-    Write-Output "Conectando ao Office 365..."
+    Write-Output "Connecting to Office 365..."
     Connect-MsolService
 }
 
@@ -637,7 +696,7 @@ catch
 foreach ($item in $usuarios) {
 
 $origem=$item.userprincipalname
-Write-Progress -Activity "Checando $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% completo: $CurrentItem de $TotalItems" -PercentComplete $PercentComplete
+Write-Progress -Activity "Checking $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% complete: $CurrentItem of $TotalItems" -PercentComplete $PercentComplete
 
 #Inicio da captura via MsolService
 Get-MsolUser -UserPrincipalName $origem |
@@ -655,12 +714,14 @@ $PercentComplete = [int](($CurrentItem / $TotalItems) * 100)
 
 }
 $elapsedTime.stop()
+Write-Progress -Activity "Checking $origem" -Completed
+
 Menu
 }
 
 # 9 Criar SMTP secundário nas mailboxes
 function nove {
-<# HEADERS NECESSARIOS 
+<# CSV HEADERS REQUIRED 
 UserPrincipalName
 SMTPSecundario
 #>
@@ -678,7 +739,7 @@ $TotalItems=$usuarios.Count
 $CurrentItem = 0
 $PercentComplete = 0
 
-Write-Host "Opcão selecionada: $opcao" -ForegroundColor Cyan
+Write-Host "Selected option: $opcao" -ForegroundColor Cyan
 $elapsedTime = [system.diagnostics.stopwatch]::StartNew()
 
 $SMTPSecundarioSim=@()
@@ -691,12 +752,12 @@ foreach ($item in $usuarios) {
 $origem=$item.userprincipalname
 $SMTP = $item.SMTPSecundario
 
-Write-Progress -Activity "$origem -> $SMTP" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% completo: $CurrentItem de $TotalItems" -PercentComplete $PercentComplete
+Write-Progress -Activity "$origem -> $SMTP" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% complete: $CurrentItem of $TotalItems" -PercentComplete $PercentComplete
 
 if(Set-Mailbox -Identity "$origem" -EmailAddresses @{add="$SMTP"} -ErrorAction SilentyContinue) {
 $comporSmtpOrigem=$origem+$delimiter+$SMTPSecundario
 $SMTPSecundarioSim+=$comporSmtpOrigem
-Write-Host "Alterando conta " -NoNewline; Write-Host $origem -ForegroundColor Yellow -NoNewline; Write-Host " adicionando " -NoNewline; Write-Host $SMTP -ForegroundColor Green;
+Write-Host "Changing mailbox " -NoNewline; Write-Host $origem -ForegroundColor Yellow -NoNewline; Write-Host " adicionando " -NoNewline; Write-Host $SMTP -ForegroundColor Green;
 
 } else {
 $comporSmtpOrigem=$origem+$delimiter+$SMTPSecundario
@@ -710,23 +771,24 @@ $CurrentItem++
 $PercentComplete = [int](($CurrentItem / $TotalItems) * 100)
 }
 
-Write-Host "Foram alterados" $SMTPSecundarioSim.count "e-mails com sucesso" -ForegroundColor Green
-Write-Host "O total de" $SMTPSecundarioNao.count "tiveram problemas" -ForegroundColor Red
+Write-Host $SMTPSecundarioSim.count "mailboxes were successfully changed" -ForegroundColor Green
+Write-Host $SMTPSecundarioNao.count "mailboxes had problems" -ForegroundColor Red
 
 $elapsedTime.stop()
+Write-Progress -Activity "$origem -> $SMTP" -Completed
 
 #================== Abrir opcoes ==================#
 "
 --------------------------------------------------------------"
 write-host -ForegroundColor Yellow " Deseja realizar alguma ação?"
-" 1- Exportar lista de erros e sucesso (.csv) - $caminholog
- 2- Exibir lista de erros na tela
- 3- Copiar para área de transferência lista de erros
- 4- Copiar para área de transferência lista concluída
- 5- Voltar ao menu inicial
+" 1- Export list of errors and successes (.csv) - $caminholog
+ 2- Display error list on screen
+ 3- Copy to clipboard error list
+ 4- Copy to clipboard completed list
+ 5- Go back to main menu
 --------------------------------------------------------------
 "
-$exportar_op9=Read-Host "Escolha a opção desejada"
+$exportar_op9=Read-Host "Enter the desired option"
 if($exportar_op9 -eq "1") {
 #exportar
 $SMTPSecundarioNao | Export-Csv $caminholog\SMTPSecundarioNao-$date.csv
@@ -759,7 +821,7 @@ Menu
 
 # 10- Converter caixa de Usermailbox para Sharedmailbox
 function dez {
-<# HEADERS NECESSARIOS 
+<# CSV HEADERS REQUIRED 
 UserPrincipalName
 #>
 
@@ -776,29 +838,31 @@ $TotalItems=$usuarios.Count
 $CurrentItem = 0
 $PercentComplete = 0
 
-Write-Host "Opcão selecionada: $opcao" -ForegroundColor Cyan
+Write-Host "Selected option: $opcao" -ForegroundColor Cyan
 $elapsedTime = [system.diagnostics.stopwatch]::StartNew()
 
 foreach ($item in $usuarios) {
 
 $origem=$item.userprincipalname
 
-Write-Progress -Activity "Alterando $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% completo: $CurrentItem de $TotalItems" -PercentComplete $PercentComplete
+Write-Progress -Activity "Changing $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% complete: $CurrentItem of $TotalItems" -PercentComplete $PercentComplete
 
 ## Comando de execucao
-Write-Host "Alterando conta " -NoNewline; Write-Host $origem -ForegroundColor Yellow -NoNewline;
+Write-Host "Converting mailbox " -NoNewline; Write-Host $origem -ForegroundColor Yellow -NoNewline;
 Set-Mailbox -Identity $origem -Type Shared
 
 $CurrentItem++
 $PercentComplete = [int](($CurrentItem / $TotalItems) * 100)
 }
 $elapsedTime.stop()
+Write-Progress -Activity "Changing $origem" -Completed
+
 Menu
 }
 
 # 11- Converter caixa de Sharedmailbox para Usermailbox
 function onze {
-<# HEADERS NECESSARIOS 
+<# CSV HEADERS REQUIRED 
 UserPrincipalName
 #>
 
@@ -815,32 +879,35 @@ $TotalItems=$usuarios.Count
 $CurrentItem = 0
 $PercentComplete = 0
 
-Write-Host "Opcão selecionada: $opcao" -ForegroundColor Cyan
+Write-Host "Selected option: $opcao" -ForegroundColor Cyan
 $elapsedTime = [system.diagnostics.stopwatch]::StartNew()
 
 foreach ($item in $usuarios) {
 
 $origem=$item.userprincipalname
 
-Write-Progress -Activity "Alterando $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% completo: $CurrentItem de $TotalItems" -PercentComplete $PercentComplete
+Write-Progress -Activity "Changing $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% complete: $CurrentItem of $TotalItems" -PercentComplete $PercentComplete
 
 ## Comando de execucao
-Write-Host "Alterando conta " -NoNewline; Write-Host $origem -ForegroundColor Yellow -NoNewline;
+Write-Host "Converting " -NoNewline; Write-Host $origem -ForegroundColor Yellow -NoNewline;
 Set-Mailbox -Identity $origem -Type Regular
 
 $CurrentItem++
 $PercentComplete = [int](($CurrentItem / $TotalItems) * 100)
 }
 $elapsedTime.stop()
+Write-Progress -Activity "Changing $origem" -Completed
+
+Menu
 }
 
 
 # 12- Adicionar permissoes em sharedmailbox
 function doze {
-<# HEADERS NECESSARIOS 
-UserPrincipalName (UPN da Shared)
-UPNUsuario (Usuario a receber a permissao)
-Permission (tipo de permissao)
+<# CSV HEADERS REQUIRED 
+UserPrincipalName (UPN from Sharedmailbox)
+UserUPN (User to receive the permission)
+Permission (Permission type)
 ---- FullAccess
 ---- SendAs
 ---- Send on Behalf Of
@@ -860,7 +927,7 @@ $CurrentItem = 0
 $PercentComplete = 0
 
 
-Write-Host "Opcão selecionada: $opcao" -ForegroundColor Cyan
+Write-Host "Selected option: $opcao" -ForegroundColor Cyan
 $elapsedTime = [system.diagnostics.stopwatch]::StartNew()
 
 $errosharedpermission=@()
@@ -868,13 +935,13 @@ $errosharedpermission=@()
 foreach ($item in $usuarios) {
 
 $permissao=$item.Permission
-$usuario=$item.UPNUsuario
+$usuario=$item.UserUPN
 $sharedmbx=$item.UserPrincipalName
 
-Write-Progress -Activity "$sharedmbx - $usuario - $permissao" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% completo: $CurrentItem de $TotalItems" -PercentComplete $PercentComplete
+Write-Progress -Activity "$sharedmbx - $usuario - $permissao" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% complete: $CurrentItem of $TotalItems" -PercentComplete $PercentComplete
 
 ## Comando de execucao
-Write-Host "Adicionando permissão " -NoNewline; Write-Host $permissao -ForegroundColor Green -NoNewline; Write-Host " para " -NoNewline; Write-Host $usuario -ForegroundColor Yellow -NoNewline; Write-Host " na caixa " -NoNewline; Write-Host $sharedmbx -ForegroundColor Yellow;
+Write-Host "Adding permission " -NoNewline; Write-Host $permissao -ForegroundColor Green -NoNewline; Write-Host " to " -NoNewline; Write-Host $usuario -ForegroundColor Yellow -NoNewline; Write-Host " in the mailbox " -NoNewline; Write-Host $sharedmbx -ForegroundColor Yellow;
 
 if($permissao -eq "FullAccess") {
 #FullAccess
@@ -894,6 +961,8 @@ $CurrentItem++
 $PercentComplete = [int](($CurrentItem / $TotalItems) * 100)
 }
 $elapsedTime.stop()
+Write-Progress -Activity "$sharedmbx - $usuario - $permissao" -Completed
+
 Menu
 }
 
@@ -901,9 +970,9 @@ Menu
 #13- Criar sharedmailbox
 function treze {
 
-<# HEADERS NECESSARIOS 
+<# CSV HEADERS REQUIRED 
 UserPrincipalName
-Nome (Display Name)
+Name (Display Name)
 #>
 
 #Importar CSV
@@ -919,24 +988,27 @@ $TotalItems=$usuarios.Count
 $CurrentItem = 0
 $PercentComplete = 0
 
-Write-Host "Opcão selecionada: $opcao" -ForegroundColor Cyan
+Write-Host "Selected option: $opcao" -ForegroundColor Cyan
 $elapsedTime = [system.diagnostics.stopwatch]::StartNew()
 
 foreach ($item in $usuarios) {
 
 $origem=$item.userprincipalname
-$nome=$item.nome
+$nome=$item.name
+$displayname=$item.displayname
 
-Write-Progress -Activity "Criando $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% completo: $CurrentItem de $TotalItems" -PercentComplete $PercentComplete
+Write-Progress -Activity "Creating $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% complete: $CurrentItem of $TotalItems" -PercentComplete $PercentComplete
 
 ## Comando de execucao
-Write-Host "Criando conta " -NoNewline; Write-Host $origem -ForegroundColor Yellow;
-New-Mailbox -Shared -Name "Social Club" -PrimarySmtpAddress $origem
+Write-Host "Creating sharedmailbox " -NoNewline; Write-Host $origem -ForegroundColor Yellow;
+New-Mailbox -Shared -Name $nome -PrimarySmtpAddress $origem -DisplayName $displayname
 
 $CurrentItem++
 $PercentComplete = [int](($CurrentItem / $TotalItems) * 100)
 }
 $elapsedTime.stop()
+Write-Progress -Activity "Creating $origem" -Completed
+
 Menu
 
 
@@ -944,9 +1016,9 @@ Menu
 
 # 14- Remover regra da inbox do usuario
 function quatorze {
-<# HEADERS NECESSARIOS 
+<# CSV HEADERS REQUIRED 
 UserPrincipalName
-InboxRule (Nome da regra a ser removida)
+InboxRule (Rule name to be removed)
 #>
 
 #Importar CSV
@@ -962,17 +1034,17 @@ $TotalItems=$usuarios.Count
 $CurrentItem = 0
 $PercentComplete = 0
 
-Write-Host "Opcão selecionada: $opcao" -ForegroundColor Cyan
+Write-Host "Selected option: $opcao" -ForegroundColor Cyan
 $elapsedTime = [system.diagnostics.stopwatch]::StartNew()
 
 foreach ($item in $usuarios) {
 
 $origem=$item.userprincipalname
 
-Write-Progress -Activity "Alterando $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% completo: $CurrentItem de $TotalItems" -PercentComplete $PercentComplete
+Write-Progress -Activity "Changing $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% complete: $CurrentItem of $TotalItems" -PercentComplete $PercentComplete
 
 ## Comando de execucao
-Write-Host "Alterando conta " -NoNewline; Write-Host $origem -ForegroundColor Yellow;
+Write-Host "Changing mailbox " -NoNewline; Write-Host $origem -ForegroundColor Yellow;
 Remove-InboxRule -Mailbox $origem -Identity $item.InboxRule -AlwaysDeleteOutlookRulesBlob -Confirm:$false
 
 
@@ -980,6 +1052,258 @@ $CurrentItem++
 $PercentComplete = [int](($CurrentItem / $TotalItems) * 100)
 }
 $elapsedTime.stop()
+Write-Progress -Activity "Changing $origem" -Completed
+
+
+Menu
+}
+
+
+# 15- Exportar permissoes de caixas de correio (Usermbx e/ou Sharedmbx)
+function quinze {
+<# CSV HEADERS REQUIRED 
+UserPrincipalName - opcional
+#>
+
+#================== Abrir opcoes ==================#
+"
+--------------------------------------------------------------"
+write-host -ForegroundColor Yellow " What do you want to do"
+" 1- Export all Sharedmailbox permissions
+ 2- Export all Usermailbox permissions
+ 3- Export all Sharedmailbox AND Usermailbox permissions
+ 4- Export permissions selecting an .csv file
+ 5- Go back to main menu
+--------------------------------------------------------------
+"
+$exportar_op15=Read-Host "Choose the desired option"
+if($exportar_op15 -eq "1") {
+#get sharedmbx
+Write-Host "Fetching mailboxes"
+$usuarios=Get-ExoMailbox -RecipientTypeDetails SharedMailbox -ResultSize Unlimited -PropertySet Delivery -Properties RecipientTypeDetails, DisplayName | Select DisplayName, UserPrincipalName, RecipientTypeDetails, GrantSendOnBehalfTo
+} elseif ($exportar_op15 -eq "2") {
+#get usermbx
+Write-Host "Fetching mailboxes"
+$usuarios=Get-ExoMailbox -RecipientTypeDetails UserMailbox -ResultSize Unlimited -PropertySet Delivery -Properties RecipientTypeDetails, DisplayName | Select DisplayName, UserPrincipalName, RecipientTypeDetails, GrantSendOnBehalfTo
+} elseif ($exportar_op15 -eq "3") {
+Write-Host "Fetching mailboxes"
+$usuarios=Get-ExoMailbox -RecipientTypeDetails UserMailbox, SharedMailbox -ResultSize Unlimited -PropertySet Delivery -Properties RecipientTypeDetails, DisplayName | Select DisplayName, UserPrincipalName, RecipientTypeDetails, GrantSendOnBehalfTo
+} elseif ($exportar_op15 -eq "4") {
+
+$File = Get-FileName
+Validate-CSVHeaders
+$usuarios = Import-csv -Path $File -Delimiter $delimiter
+
+} elseif ($exportar_op15 -eq "5") {
+Menu
+}
+
+If ($usuarios.Count -eq 0) { 
+    Write-Host "No mailboxes found. Returning to main menu..." -ForegroundColor Red
+    Start-Sleep 2
+    Menu
+} 
+
+#Contador da barra de progresso
+#Zerar variaveis
+$TotalItems=$usuarios.Count
+$CurrentItem = 0
+$PercentComplete = 0
+
+Write-Host "Option selected: $opcao" -ForegroundColor Cyan
+$elapsedTime = [system.diagnostics.stopwatch]::StartNew()
+$Report = [System.Collections.Generic.List[Object]]::new() #Create output file 
+
+foreach ($item in $usuarios) {
+
+$origem=$item.userprincipalname
+$CurrentItem++
+$PercentComplete = [int](($CurrentItem / $TotalItems) * 100)
+
+Write-Progress -Activity "Checking $origem" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% complete: $CurrentItem of $TotalItems" -PercentComplete $PercentComplete
+
+## Comando de execucao
+#Write-Host "Checando conta " -NoNewline; Write-Host $origem -ForegroundColor Yellow;
+$Permissions = Get-ExoRecipientPermission -Identity $origem | ? { $_.Trustee -ne "NT AUTHORITY\SELF" }
+    If ($Null -ne $Permissions) {
+        # Grab information about SendAs permission and output it into the report
+        ForEach ($Permission in $Permissions) {
+            $ReportLine = [PSCustomObject] @{
+                Mailbox     = $item.DisplayName
+                UPN         = $item.UserPrincipalName
+                Permission  = $Permission | Select -ExpandProperty AccessRights
+                AssignedTo  = $Permission.Trustee
+                MailboxType = $item.RecipientTypeDetails 
+            } 
+            $Report.Add($ReportLine) 
+        }
+    }
+
+    # Grab information about FullAccess permissions
+    $Permissions = Get-ExoMailboxPermission -Identity $origem | ? { $_.User -ne "NT AUTHORITY\SELF" }    
+    If ($Null -ne $Permissions) {
+        # Grab each permission and output it into the report
+        ForEach ($Permission in $Permissions) {
+            $ReportLine = [PSCustomObject] @{
+                Mailbox     = $item.DisplayName
+                UPN         = $item.UserPrincipalName
+                Permission  = $Permission | Select -ExpandProperty AccessRights
+                AssignedTo  = $Permission.User
+                MailboxType = $item.RecipientTypeDetails 
+            } 
+            $Report.Add($ReportLine) 
+        }
+    } 
+
+    # Check if this mailbox has granted Send on Behalf of permission to anyone
+    If (![string]::IsNullOrEmpty($item.GrantSendOnBehalfTo)) {
+        ForEach ($Permission in $item.GrantSendOnBehalfTo) {
+            $ReportLine = [PSCustomObject] @{
+                Mailbox     = $item.DisplayName
+                UPN         = $item.UserPrincipalName
+                Permission  = "Send on Behalf Of"
+                AssignedTo  = (Get-ExoRecipient -Identity $Permission).PrimarySmtpAddress
+                MailboxType = $item.RecipientTypeDetails 
+            } 
+            $Report.Add($ReportLine) 
+        }
+    }
+
+}
+
+$elapsedTime.stop()
+Write-Progress -Activity "Checking $origem" -Completed
+
+$Report | Sort -Property @{Expression = { $_.MailboxType }; Ascending = $False }, Mailbox | Export-CSV $caminholog\MailboxPermissions-$date.csv -NoTypeInformation -Encoding UTF8 -Delimiter $delimiter
+Write-Host $usuarios.Count "mailboxes scanned."
+Write-Host "CSV File exported to $caminholog\MailboxPermissions-$date.csv" -ForegroundColor Cyan
+
+Menu
+}
+
+# 16- Verificar se archive e/ou litigation hold está habilitado
+function dezesseis {
+<# CSV HEADERS REQUIRED 
+UserPrincipalName - required
+#>
+
+Write-Host "Option selected: $opcao" -ForegroundColor Cyan
+$Result=@() 
+$mailboxes=@()
+$MbxNao=@()
+
+#================== Abrir opcoes ==================#
+"
+--------------------------------------------------------------"
+write-host -ForegroundColor Yellow " What do you want to do"
+" 1- Check all Usermailbox
+ 2- Check usermailbox selecting an .csv file
+ 3- Go back to main menu
+--------------------------------------------------------------
+"
+$exportar_op16=Read-Host "Choose the desired option"
+if($exportar_op16 -eq "1") {
+#pegar usermbx
+Write-Host "Fetching mailboxes..."
+#ler todas as mbx
+$mailboxes=Get-Mailbox -RecipientTypeDetails Usermailbox -ResultSize Unlimited | Select DisplayName, UserPrincipalName, PrimarySmtpAddress, ArchiveStatus, ArchiveName, ArchiveState, ArchiveWarningQuota, ArchiveQuota, AutoExpandingArchiveEnabled, LitigationHoldEnabled, LitigationHoldDuration
+} elseif ($exportar_op16 -eq "2") {
+#ler csv
+$File = Get-FileName
+Validate-CSVHeaders
+$importcsv16 = Import-csv -Path $File -Delimiter $delimiter
+Write-Host "Fetching mailboxes..."
+foreach ($item in $importcsv16) {
+#ler mbx do csv e agregar a variavel mailboxes
+$mailboxes +=Get-Mailbox $item.userprincipalname | Select DisplayName, UserPrincipalName, PrimarySmtpAddress, ArchiveStatus, ArchiveName, ArchiveState, ArchiveWarningQuota, ArchiveQuota, AutoExpandingArchiveEnabled, LitigationHoldEnabled, LitigationHoldDuration
+}
+
+} elseif ($exportar_op15 -eq "3") {
+Menu
+}
+
+If ($mailboxes.Count -eq 0) { 
+    Write-Host "No mailboxes found. Returning to main menu..." -ForegroundColor Red
+    Start-Sleep 2
+    Menu
+} 
+
+#Contador da barra de progresso
+#Zerar variaveis
+$TotalItems=$mailboxes.Count
+$CurrentItem = 0
+$PercentComplete = 0
+
+
+$elapsedTime = [system.diagnostics.stopwatch]::StartNew()
+$Report = [System.Collections.Generic.List[Object]]::new() #Create output file 
+
+foreach ($item in $mailboxes) {
+
+$mbx = $item
+$upn16=$mbx.userprincipalname
+$size_mbx = $null
+$size_arc = $null
+
+$CurrentItem++
+$PercentComplete = [int](($CurrentItem / $TotalItems) * 100)
+
+Write-Progress -Activity "Checking $upn16" -Status "$([string]::Format("Tempo em execução: {0:d2}:{1:d2}:{2:d2}", $elapsedTime.Elapsed.hours, $elapsedTime.Elapsed.minutes, $elapsedTime.Elapsed.seconds)) | $PercentComplete% complete: $CurrentItem of $TotalItems" -PercentComplete $PercentComplete
+
+## Comando de execucao ##
+#Write-Host "Checando conta " -NoNewline; Write-Host $origem -ForegroundColor Yellow;
+
+#Escreve o progresso
+Write-Host "Processando" $mbx.UserPrincipalName
+
+#pegar dados da mailbox
+$mbs_mbx = Get-MailboxStatistics $mbx.UserPrincipalName
+if ($mbs_mbx.TotalItemSize -ne $null){
+$size_mbx = [math]::Round(($mbs_mbx.TotalItemSize.ToString().Split('(')[1].Split(' ')[0].Replace(',','')/1MB),2)
+}else{
+$size_mbx = 0 }
+
+
+#se archive estiver ativo
+if ($mbx.ArchiveStatus -eq "Active"){
+#pegar dados do archive
+$mbs_arc = Get-MailboxStatistics $mbx.UserPrincipalName -Archive
+
+#le o tamanho do archive
+if ($mbs_arc.TotalItemSize -ne $null){
+$size_arch = [math]::Round(($mbs_arc.TotalItemSize.ToString().Split('(')[1].Split(' ')[0].Replace(',','')/1MB),2)
+}else{
+$size_arch = 0 }
+}
+
+#Monta o resultado para exportar no csv
+$Result += New-Object -TypeName PSObject -Property $([ordered]@{ 
+DisplayName = $mbx.DisplayName
+UserPrincipalName = $mbx.UserPrincipalName
+PrimarySmtpAddress = $mbx.PrimarySmtpAddress
+MailboxSizeInMB = $size_mbx
+ArchiveStatus =$mbx.ArchiveStatus
+ArchiveName =$mbx.ArchiveName
+ArchiveState =$mbx.ArchiveState
+ArchiveMailboxSizeInMB = $size_arc
+ArchiveWarningQuota=if ($mbx.ArchiveStatus -eq "Active") {$mbx.ArchiveWarningQuota} Else { $null } 
+ArchiveQuota = if ($mbx.ArchiveStatus -eq "Active") {$mbx.ArchiveQuota} Else { $null } 
+AutoExpandingArchiveEnabled=$mbx.AutoExpandingArchiveEnabled
+LitigationHoldEnabled=$mbx.LitigationHoldEnabled
+LitigationHoldDuration=if ($mbx.LitigationHoldEnabled -eq "True") {$mbx.LitigationHoldDuration} Else { $null }
+})
+
+
+} 
+$elapsedTime.stop()
+Write-Progress -Activity "Checking $upn16" -Completed
+
+$Result | Export-CSV $caminholog\MailboxSize-ArchiveLitigationReport-$date.csv -NoTypeInformation -Encoding UTF8 -Delimiter $delimiter
+Write-Host $mailboxes.Count "mailboxes scanned."
+Write-Host "CSV File exported to $caminholog\MailboxSize-ArchiveLitigationReport-$date.csv" -ForegroundColor Cyan
+
+
+
 Menu
 }
 
