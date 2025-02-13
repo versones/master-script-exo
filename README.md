@@ -45,4 +45,4 @@ Functions currently available:
 
  
  Follow the evolution of the project on my blog
- https://www.victornanuvem.com/
+ https://victornanuvem.blogspot.com/
